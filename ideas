@@ -1,0 +1,39 @@
+# ideas for the package
+
+Goal: Create a package where weed scientists can organize an experiment, design it and, analysing it without the need of any other software.
+
+# Tools provided by the package
+
+##Herbicide database##
+Create an database with a complete list of herbicides with the follow layout:
+
+Columns: A_I,Trade_name, Company, Conc_%,Form, Conc_US, Conc_INT, Surfactant
+
+## Weed database? ###
+
+Maybe create a weed database with species name, common name etc
+
+
+## Herbicide treatment list generation ###
+
+If user needs to calculate treatment rates we will provide a function to do it based on a query at the data base:
+
+example: treatments(data = Query_fromDB, type = "DR", n_treat = 9, step = 2, rate = 20 , unit = "US",
+                    height = 12, pres = 30)
+
+This should generate a df with the herbicide info, treat_number, rate_US, rate_INT
+
+### Multiple experimental designs ###
+
+The user should provide the desired experimental design and a function will generate the order
+
+example: exp_design(data = experiment_info_df, design = "RCBD", location = "field", reps = 6, blocks = 4,
+                    exp_area = 40, units = "US", design_map = TRUE)
+
+### Analysis #####
+
+- connection to drc package
+- Pretty plots with ggplot
+-
+
+

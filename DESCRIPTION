@@ -1,0 +1,10 @@
+Package: WeedSci
+Type: Package
+Title: WeedSciR - A R package for weed science by weed scientists
+Version: 0.1.0
+Author: Lucas Kopecky Bobadilla
+Maintainer: The package maintainer <lucask3@illinois.edu>
+Description: This package have the objective to provide weed scientists a unique program from the experimental design until data analysis
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
