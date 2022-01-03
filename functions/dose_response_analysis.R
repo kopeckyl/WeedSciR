@@ -1,97 +1,13 @@
-##### FUNCTIONS FOR PACKAGE #####
-
-### LIBRARY ---------
-library(devtools)
+# load libraries
 library(drc)
 library(grid)
 library(tidyverse)
 library(broom)
 library(patchwork)
 
-
-# FUNCTIONS --------------------------------
-
-# RCBD FUNCTION ======
-RCBD_design <- function(blocks_n, treat_n, plot_label = c(treatments, plots), print_plan = TRUE){
-  # # set number of replications and treatments
-  #blocks_n <- 6
-  # treat_n <- 10
-  #generate treatments
-  treatments <- c()
-  for (t in 1:treat_n) {
-    block <- sample(rep(1:treat_n))
-    treatments <- append(treatments, block)
-  }
-  treatments <- factor(treatments)
-
-  # generate plot data frame treatments
-  x1 <- rep(1:treat_n, each = treat_n)
-  x2 <- x1 + 1
-
-  y1 <- rep(1:treat_n, treat_n)
-  y2 <- y1 + 1
-
-
-  df <- tibble(x1,x2,y1,y2,treatments)
-
-  # generate plot number sequences
-  seq_test <- seq(from = 100, to = 100*blocks_n, by = 100)
-  plots <- NULL
-  for (i in 1:treat_n){
-    for (block in seq_test){
-      plots <- append(plots, block+i)
-    }
-    plots <- sort(plots)
-  }
-
-  # create experimental tables
-  experiment_table <- df %>%
-    top_n(n= treat_n*blocks_n) %>%
-    mutate(plots = plots,
-           ID = seq(from = 1, to = treat_n*blocks_n, by = 1)) %>%
-    select(ID,blocks = x1, plots, treatments)
-
-  #save table to workspace
-  experiment_plan <<- experiment_table
-
-  # generate block sequences
-  blocks <- seq(1:blocks_n)
-  block_regions_x <- NULL
-  block_regions_y <- NULL
-  block_names <- NULL
-  for (i in blocks) {
-    block_regions_x <- append(block_regions_x,i+.5)
-    block_regions_y <- append(block_regions_y, treat_n+1.5)
-    block_names <- append(block_names, paste("Block ",i, sep = ""))
-  }
-
-  #get block annotation
-  blocks_ann <- tibble(x1 = block_regions_x, y1 =block_regions_y, block_names)
-
-  # generate plot for design
-  plot_design <- df %>%
-    mutate(plots = c(experiment_table$plots, rep(NA,nrow(df) - nrow(experiment_table)))) %>%
-    full_join(blocks_ann) %>%
-    ggplot(aes(x1,y1)) +
-    xlim(1,blocks_n + 1) +
-    ylim(1,treat_n+2) +
-    geom_rect(mapping=aes(xmin=x1, xmax=x2, ymin=y1, ymax=y2, fill = treatments), alpha = 0.2, color = "black") +
-    geom_text(aes(x=x1+(x2-x1)/2, y=y1+(y2-y1)/2, label= {{ plot_label }} ), size=4) +
-    theme_nothing() +
-    theme(legend.position = "none",
-          axis.title = element_blank()) +
-    geom_text(aes(x = x1, y = y1, label = block_names))
-
-  # save plot to workspeace
-  plot_design <<- plot_design
-  # return table with treatments
-  if (print_plan == TRUE) {
-    return(plot_design)
-  }
-}
-
-# FIT DOSE RESPONSE FUNCTION =====
-
+# load data
+df <- S.alba
+# choose variables
 FitDoseResponse <- function(dose, var_name, group, df,
                             fit_weibull = FALSE, get_AIC_table = FALSE,
                             get_summary = TRUE) {
@@ -202,7 +118,12 @@ FitDoseResponse <- function(dose, var_name, group, df,
 
 }
 
-# function to check for normality =====
+FitDoseResponse("Dose", "DryMatter", "Herbicide",
+                df, fit_weibull = TRUE, get_AIC_table = TRUE)
+
+# plot model assumption plots
+
+# function to check for normality
 normalQQ_plot <- function (model) # argument: vector of numbers
 {
   # following four lines from base R's qqline()
@@ -234,7 +155,7 @@ normalQQ_plot <- function (model) # argument: vector of numbers
 
 }
 
-# function to check for homogeinety =====
+# function for variance assumption
 homogTest_plot <- function(model){
   # run fligner test - homogeinety
   df <- tibble(model$data[c(1,2,4)])
@@ -259,7 +180,39 @@ homogTest_plot <- function(model){
     annotation_custom(grob)
 }
 
-# function to look for outliers ======
+
+# function to apply correction if needed
+applyBoxCox <- function(model){
+  # calculate shapiro-wilk
+  Shap_test <- shapiro.test(residuals(model))
+  Shap_pval <- Shap_test$p.value
+
+  # run fligner test - homogeneity
+  df <- tibble(model$data[c(1,2,4)])
+  Group <-  rep("Lower",nrow(df))
+  Group[df$var_name > median(df$var_name)] <-  "Upper"
+  df$Group <- as.factor(Group)
+  the.FKtest <- fligner.test(residuals(model), df$Group)
+  FK_pval <- the.FKtest$p.value
+
+  # apply correction
+  if (FK_pval <= 0.05 | Shap_pval <= 0.05) {
+    print("Box-Cox correction applied using the Anova method. New model saved into global environment.")
+    corrected_model <<- boxcox(selected_model,method="anova", plotit = F)
+  } else {
+    print("No correction needed.")
+  }
+}
+
+# final diagnostic plot
+homogTest_plot(selected_model)
+normalQQ_plot(selected_model)
+#apply correction
+applyBoxCox(selected_model)
+
+
+# function to look for outliers
+model <- selected_model
 ouliersRemoval <- function(model) {
 
   # check for outliers
@@ -282,25 +235,5 @@ ouliersRemoval <- function(model) {
 
 }
 
-# function to apply correction =====
-applyBoxCox <- function(model){
-  # calculate shapiro-wilk
-  Shap_test <- shapiro.test(residuals(model))
-  Shap_pval <- Shap_test$p.value
 
-  # run fligner test - homogeneity
-  df <- tibble(model$data[c(1,2,4)])
-  Group <-  rep("Lower",nrow(df))
-  Group[df$var_name > median(df$var_name)] <-  "Upper"
-  df$Group <- as.factor(Group)
-  the.FKtest <- fligner.test(residuals(model), df$Group)
-  FK_pval <- the.FKtest$p.value
-
-  # apply correction
-  if (FK_pval <= 0.05 | Shap_pval <= 0.05) {
-    print("Box-Cox correction applied using the Anova method. New model saved into global environment.")
-    corrected_model <<- boxcox(selected_model,method="anova", plotit = F)
-  } else {
-    print("No correction needed.")
-  }
-}
+ouliersRemoval(selected_model)
