@@ -94,7 +94,8 @@ RCBD_design <- function(blocks_n, treat_n, plot_label = c(treatments, plots), pr
 
 FitDoseResponse <- function(dose, var_name, variable, df,
                             fit_weibull = FALSE, get_AIC_table = FALSE,
-                            get_summary = FALSE, applyBC = FALSE) {
+                            get_summary = FALSE, applyBC = FALSE, remove_outliers = FALSE,
+                            plot_curve = FALSE) {
 
   # check if grouping variable is a factor
   if (is.factor(df[,variable]) == FALSE) {
@@ -111,44 +112,44 @@ FitDoseResponse <- function(dose, var_name, variable, df,
     # fit log logistics models
 
     #builds a model with three parameters
-    ll3_model <- drm(var_name ~ dose, variable, data= df,
-                     fct=LL.3())
+    ll3_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct=LL.3()))
     #builds a model with four parameters
-    ll4_model <- drm(var_name ~ dose, variable, data= df,
-                     fct=LL.4())
+    ll4_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct=LL.4()))
     # builds a model with five parameters
-    ll5_model <- drm(var_name ~ dose, variable, data= df,
-                     fct=LL.5())
+    ll5_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct=LL.5()))
     # join models into list
     models_list <- list(ll3_model = ll3_model,
                         ll4_model = ll4_model,
                         ll5_model = ll5_model)
   } else{
     # fit log logistics models
-    # three parameters
-    ll3_model <- drm(var_name ~ dose, variable, data= df,
-                     fct=LL.3())
-    # four parameters
-    ll4_model <- drm(var_name ~ dose, variable, data= df,
-                     fct=LL.4())
-    # five parameters
-    ll5_model <- drm(var_name ~ dose, variable, data= df,
-                     fct=LL.5())
+    #builds a model with three parameters
+    ll3_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct=LL.3()))
+    #builds a model with four parameters
+    ll4_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct=LL.4()))
+    # builds a model with five parameters
+    ll5_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct=LL.5()))
 
     models_logistic <- list(ll3_model = ll3_model,
                             ll4_model = ll4_model,
                             ll5_model = ll5_model)
     # build model with weillbul curves
     #W1
-    W13_model <- drm(var_name ~ dose, variable, data = df,
-                     fct = W1.3())
-    W14_model <- drm(var_name ~ dose, variable, data = df,
-                     fct = W1.4())
+    W13_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct = W1.3()))
+    W14_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct = W1.4()))
     #W2
-    W23_model <- drm(var_name ~ dose, variable, data = df,
-                     fct = W2.3())
-    W24_model <- drm(var_name ~ dose, variable, data = df,
-                     fct = W2.4())
+    W23_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct = W2.3()))
+    W24_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                     fct = W2.4()))
     # join weibull models into a list
     models_weibull <- list(W13_model = W13_model,
                            W14_model = W14_model,
@@ -172,19 +173,29 @@ FitDoseResponse <- function(dose, var_name, variable, df,
   # select best model
   selected_model <<- get(model_table[1,]$id)
 
-
-
-
-
   # print message with the selected model
   print(paste("According to AIC and BIC parameters, the model", model_table[1,1]$id, "is the best fit for this data",
               "(AIC =", round(model_table[1,]$AIC,2), "BIC =", paste0(round(model_table[1,]$BIC,2), ")")))
+
+  # remove outliers
+
+  if (remove_outliers == TRUE) {
+    print("Check for outliers...")
+    ouliersRemoval(selected_model)
+  }
+
+  # boxCox transformation
+
+  if (applyBC == TRUE) {
+    print("Applying Box-Cox correction...")
+    applyBoxCox(selected_model)
+  }
 
   # if user wants to print the AIC table
   if (get_AIC_table == TRUE) {
     # create a AIC table
     AIC_table <<- model_table %>% dplyr::select(id:BIC)
-    print("Model fit results saved into global environment.")
+    print("Model fit results saved as AIC_table .")
   }
 
   if (get_summary == TRUE) {
@@ -196,9 +207,13 @@ FitDoseResponse <- function(dose, var_name, variable, df,
                                                  paramater == "d" ~ "upper",
                                                  paramater == "e" ~ "ED50",
                                                  TRUE ~ as.character(paramater)))
-    print("Summary table:")
-    return(summ_table)
+    print("Summary table saved as summ_table.")
 
+  }
+
+  # plot curve
+  if (plot_curve == TRUE) {
+    plot_DR(selected_model)
   }
 
 }
@@ -236,14 +251,13 @@ normalQQ_plot <- function (model) # argument: vector of numbers
 }
 
 # function to check for homogeinety =====
-homogTest_plot <- function(model){
-  # run fligner test - homogeinety
-  df <- tibble(model$data[c(1,2,4)])
-  variable <-  rep("Lower",nrow(df)) #Creates a vector that repeats "Lower" n times
-  Group[selected_model$data$var_name > median(selected_model$data$var_name)] <-  "Upper" #Changing the appropriate values to "Upper"
-  Group <- as.factor(Group) #Changes it to a factor, which R recognizes as a grouping variable.
-  df$Group <- Group
-  the.FKtest <- fligner.test(residuals(model), df$Group)
+homogTest_plot <- function(dr_model){
+  # run fligner test - homogeneity
+  data_model <- data.frame(dr_model$data[c(1,2,4)])
+  direction <- rep("Lower",nrow(data_model))
+  direction[data_model$var_name > median(data_model$var_name)] <- "Upper"
+  data_model$direction <- as.factor(direction)
+  the.FKtest <- fligner.test(residuals(dr_model), data_model$direction)
   FK_pval <- the.FKtest$p.value
 
   # create annotation with the fligner test
@@ -251,7 +265,7 @@ homogTest_plot <- function(model){
                             gp=gpar(col="red", fontsize=13, fontface="italic")))
 
   #  create plot
-  ggplot(augment(selected_model, data = df),
+  ggplot(augment(selected_model, data = data_model),
          aes(.fitted, .resid)) + geom_point(color = "#FF6666", size = 2) +
     stat_smooth(method="loess", formula = 'y ~ x') +
     geom_hline(yintercept=0, col="red", linetype="dashed") +
@@ -339,6 +353,6 @@ plot_DR <- function(DR_model) {
     labs(title= "", x = "Dose (g a.i /ha)",  y = "Biomass") +
     theme(legend.position = "bottom") + guides(color=guide_legend(title="Group"))
 
-  return(p1)
+  p1
 }
 

@@ -11,9 +11,14 @@ df <- S.alba
 # fit dose response
 
 FitDoseResponse(dose = "Dose", "DryMatter", variable = "Herbicide",
-                df = df, fit_weibull = TRUE, get_AIC_table = TRUE, get_summary = TRUE)
+                df = df, fit_weibull = TRUE, get_AIC_table = TRUE, get_summary = TRUE,
+                remove_outliers = TRUE, applyBC = TRUE, plot_curve = TRUE)
 
-applyBoxCox(selected_model, data = df)
+
+
+
+
+applyBoxCox(selected_model)
 t <- selected_model$call
 # plot 1 - DRC version
 
@@ -56,6 +61,10 @@ p1 <- ggplot(data = df_1, aes(x = Dose, y = var_value)) +
   labs(title= "", x = "Dose (g a.e /ha)",  y = "Biomass") +
   theme(legend.position = "bottom")
 
+t <- selected_model$data
+cols <- which(names(selected_model$data) == 'variable')
+names(t)[cols] <- paste0('variable', seq_along(cols))
+names(t)
 
 ## create function for the first plot ---------
 selected_model$data
@@ -64,16 +73,35 @@ plot_DR <- function(DR_model) {
   # general sd function
   std_mean <- function(x) sd(x,na.rm=TRUE)/sqrt(length(x))
 
-  # create a dataframe to plot
-  df_plot <- tibble(selected_model$data) %>%
-    group_by(Dose, Herbicide) %>%
-    summarize(var_value = mean(DryMatter, na.rm=TRUE),
-              sd = std_mean(DryMatter)) %>%
-    mutate(Dose = Dose + 0.1)
+  # correct model dataframe and create a dataframe to plot
+  DR_data <- DR_model$data
+  cols <- which(names(DR_data) == 'variable')
+  names(DR_data)[cols] <- paste0('variable', seq_along(cols))
+  df_plot <- tibble(DR_data) %>%
+    group_by(dose, variable2) %>%
+    summarize(var_value = mean(var_name, na.rm=TRUE),
+              sd = std_mean(var_name)) %>%
+    mutate(dose = dose + 0.1)
 
+  # generate plot
+  p1 <- ggplot(data = df_plot, aes(x = dose, y = var_value)) +
+    geom_point(aes(color = variable2,
+                   text = paste("Dose:", dose,
+                                "\nHerbicide:", variable2,
+                                "\nBiomass:", var_value))) +
+    scale_x_log10() +
+    geom_errorbar(mapping=aes(ymin=var_value-sd, ymax=var_value+sd,color = variable2), width=0.2, alpha = .4) +
+    geom_smooth(aes(color = variable2),
+                method = drm,
+                method.args = list(fct = L.4()), se = F) +
+    theme_light() +
+    labs(title= "", x = "Dose (g a.i /ha)",  y = "Biomass") +
+    theme(legend.position = "bottom") + guides(color=guide_legend(title="Group"))
+
+  return(p1)
 }
 
-
+plot_DR(selected_model)
 
 ggplotly(p1, tooltip = "text")
 
