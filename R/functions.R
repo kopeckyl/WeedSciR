@@ -95,7 +95,8 @@ RCBD_design <- function(blocks_n, treat_n, plot_label = c(treatments, plots), pr
 FitDoseResponse <- function(dose, var_name, variable, df,
                             fit_weibull = FALSE, get_AIC_table = FALSE,
                             get_summary = FALSE, applyBC = FALSE, remove_outliers = FALSE,
-                            plot_curve = FALSE) {
+                            plot_curve = FALSE, survival_model = FALSE) {
+
 
   # check if grouping variable is a factor
   if (is.factor(df[,variable]) == FALSE) {
@@ -107,115 +108,157 @@ FitDoseResponse <- function(dose, var_name, variable, df,
   var_name <- df[,as.character(var_name)]
   variable <- df[,as.character(variable)]
 
-  # fit models
-  if (fit_weibull == FALSE) {
-    # fit log logistics models
+  # if survival (binomial) analysis is the goal
+  if (survival_model == TRUE) {
+    print("Running a survival dose response analysis:")
+    if (all(sapply(df$var_name, function(x) is.numeric(x) & x %in% c(0,1,NA))) | is.logical(df$var_name)) {
 
-    #builds a model with three parameters
-    ll3_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct=LL.3()))
-    #builds a model with four parameters
-    ll4_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct=LL.4()))
-    # builds a model with five parameters
-    ll5_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct=LL.5()))
-    # join models into list
-    models_list <- list(ll3_model = ll3_model,
-                        ll4_model = ll4_model,
-                        ll5_model = ll5_model)
-  } else{
-    # fit log logistics models
-    #builds a model with three parameters
-    ll3_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct=LL.3()))
-    #builds a model with four parameters
-    ll4_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct=LL.4()))
-    # builds a model with five parameters
-    ll5_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct=LL.5()))
+      # print message
+      print("Model saved in the global environment as binomial_model.")
+      # fit binomial model
+      binomial_model <<- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                             type=("binomial"),
+                                             fct=LL.2(names=c("slope", "LD50"))))
 
-    models_logistic <- list(ll3_model = ll3_model,
-                            ll4_model = ll4_model,
-                            ll5_model = ll5_model)
-    # build model with weillbul curves
-    #W1
-    W13_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct = W1.3()))
-    W14_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct = W1.4()))
-    #W2
-    W23_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct = W2.3()))
-    W24_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
-                                     fct = W2.4()))
-    # join weibull models into a list
-    models_weibull <- list(W13_model = W13_model,
-                           W14_model = W14_model,
-                           W23_model = W23_model,
-                           W24_model = W24_model)
+      if (get_summary == TRUE) {
+        # print message
+        print("Saved summary table as binom_model_summary:")
+        # save model summary
+        binom_model_summary <<- tidy(binomial_model)
+        return(binom_model_summary)
+      }
 
-    # create a list with all modules
-
-    models_list <- c(models_logistic, models_weibull)
+    } else{
+      stop("Your response variable is not binomial. Make sure your variable is at 0/1 or TRUE/FALSE format.")
+    }
   }
 
-  # get better model using AIC and BIC
-  model_table <- models_list %>%
-    lapply(FUN=glance) %>%
-    lapply(FUN=function(x) x[(names(x) %in% c("AIC", "BIC"))]) %>%
-    bind_rows(.id = "id") %>%
-    mutate(model = models_list,
-           summary = map(model, tidy)) %>%
-    arrange(AIC, BIC)
+  if (survival_model == FALSE) {
+    # fit models
+    if (fit_weibull == FALSE) {
+      # fit log logistics models
 
-  # select best model
-  selected_model <<- get(model_table[1,]$id)
+      #builds a model with three parameters
+      ll3_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct=LL.3()))
+      #builds a model with four parameters
+      ll4_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct=LL.4()))
+      # builds a model with five parameters
+      ll5_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct=LL.5()))
+      # join models into list
+      models_list <- list(ll3_model = ll3_model,
+                          ll4_model = ll4_model,
+                          ll5_model = ll5_model)
+    } else{
+      # fit log logistics models
+      #builds a model with three parameters
+      ll3_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct=LL.3()))
+      #builds a model with four parameters
+      ll4_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct=LL.4()))
+      # builds a model with five parameters
+      ll5_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct=LL.5()))
 
-  # print message with the selected model
-  print(paste("According to AIC and BIC parameters, the model", model_table[1,1]$id, "is the best fit for this data",
-              "(AIC =", round(model_table[1,]$AIC,2), "BIC =", paste0(round(model_table[1,]$BIC,2), ")")))
+      models_logistic <- list(ll3_model = ll3_model,
+                              ll4_model = ll4_model,
+                              ll5_model = ll5_model)
+      # build model with weillbul curves
+      #W1
+      W13_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct = W1.3()))
+      W14_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct = W1.4()))
+      #W2
+      W23_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct = W2.3()))
+      W24_model <- do.call("drm", list(var_name ~ dose, variable, data= df,
+                                       fct = W2.4()))
+      # join weibull models into a list
+      models_weibull <- list(W13_model = W13_model,
+                             W14_model = W14_model,
+                             W23_model = W23_model,
+                             W24_model = W24_model)
 
-  # remove outliers
+      # create a list with all modules
 
-  if (remove_outliers == TRUE) {
-    print("Check for outliers...")
-    ouliersRemoval(selected_model)
+      models_list <- c(models_logistic, models_weibull)
+    }
+
+    # get better model using AIC and BIC
+    model_table <- models_list %>%
+      lapply(FUN=glance) %>%
+      lapply(FUN=function(x) x[(names(x) %in% c("AIC", "BIC","logLik"))]) %>%
+      bind_rows(.id = "id") %>%
+      mutate(model = models_list,
+             summary = map(model, tidy)) %>%
+      arrange(AIC, BIC) %>%
+      mutate(logLik = as.double(logLik))
+
+    # get linear regressions for comparison
+    linFitList <- list(linear = lm(var_name ~ dose, data = df),
+                       quadratic = lm(var_name ~ dose + I(dose * dose), data = df),
+                       cubic = lm(var_name ~ dose + I(dose * dose) + I(dose * dose *
+                                                                         dose), data = df))
+    linear_table <- linFitList %>%
+      lapply(FUN=glance) %>%
+      lapply(FUN=function(x) x[(names(x) %in% c("AIC", "BIC","logLik"))]) %>%
+      bind_rows(.id = "id") %>%
+      mutate(model = linFitList,
+             summary = map(model, tidy)) %>%
+      arrange(AIC, BIC)
+
+    # add to the table
+
+
+    # select best model
+    selected_model <<- get(model_table[1,]$id)
+
+    # print message with the selected model
+    print(paste("According to AIC and BIC parameters, the model", model_table[1,1]$id, "is the best fit for this data",
+                "(AIC =", round(model_table[1,]$AIC,2), "BIC =", paste0(round(model_table[1,]$BIC,2), ")")))
+
+    # remove outliers
+
+    if (remove_outliers == TRUE) {
+      print("Check for outliers...")
+      ouliersRemoval(selected_model)
+    }
+
+    # boxCox transformation
+
+    if (applyBC == TRUE) {
+      print("Applying Box-Cox correction...")
+      applyBoxCox(selected_model)
+    }
+
+    # if user wants to print the AIC table
+    if (get_AIC_table == TRUE) {
+      # create a AIC table
+      AIC_table <<- model_table %>%
+        full_join(linear_table) %>%
+        dplyr::select(id:logLik)  %>%
+        arrange(AIC, BIC)
+
+      print("Model fit results saved as AIC_table. Table includes linear regressions for comparison.")
+    }
+
+    if (get_summary == TRUE) {
+      summ_table <<- model_table[1,] %>%
+        unnest(summary) %>%
+        dplyr::select(paramater = term, variable = curve, estimate:p.value) %>%
+        dplyr::mutate(paramater = dplyr::case_when(paramater == "b" ~ "slope",
+                                                   paramater == "c" ~ "lower",
+                                                   paramater == "d" ~ "upper",
+                                                   paramater == "e" ~ "ED50",
+                                                   TRUE ~ as.character(paramater)))
+      print("Summary table saved as summ_table:")
+      return(summ_table)
+    }
   }
-
-  # boxCox transformation
-
-  if (applyBC == TRUE) {
-    print("Applying Box-Cox correction...")
-    applyBoxCox(selected_model)
-  }
-
-  # if user wants to print the AIC table
-  if (get_AIC_table == TRUE) {
-    # create a AIC table
-    AIC_table <<- model_table %>% dplyr::select(id:BIC)
-    print("Model fit results saved as AIC_table .")
-  }
-
-  if (get_summary == TRUE) {
-    summ_table <<- model_table[1,] %>%
-      unnest(summary) %>%
-      dplyr::select(paramater = term, variable = curve, estimate:p.value) %>%
-      dplyr::mutate(paramater = dplyr::case_when(paramater == "b" ~ "slope",
-                                                 paramater == "c" ~ "lower",
-                                                 paramater == "d" ~ "upper",
-                                                 paramater == "e" ~ "ED50",
-                                                 TRUE ~ as.character(paramater)))
-    print("Summary table saved as summ_table.")
-
-  }
-
-  # plot curve
-  if (plot_curve == TRUE) {
-    plot_DR(selected_model)
-  }
-
 }
 
 # function to check for normality =====
@@ -298,7 +341,7 @@ ouliersRemoval <- function(model) {
 }
 
 dr_model <- selected_model
-# function to apply correction (not working properly) =====
+# function to apply correction =====
 applyBoxCox <- function(dr_model,data){
   # calculate shapiro-wilk
   Shap_test <- shapiro.test(residuals(dr_model))
@@ -323,15 +366,14 @@ applyBoxCox <- function(dr_model,data){
 
 # function to call the first type of plot =====
 
-plot_DR <- function(DR_model) {
+ggDoseResponse <- function(DR_model, error_bars = TRUE) {
 
   # general sd function
   std_mean <- function(x) sd(x,na.rm=TRUE)/sqrt(length(x))
 
   # correct model dataframe and create a dataframe to plot
   DR_data <- DR_model$data
-  cols <- which(names(DR_data) == 'variable')
-  names(DR_data)[cols] <- paste0('variable', seq_along(cols))
+  colnames(DR_data) <- c("dose", "var_name", "variable1", "variable2", "weights")
   df_plot <- tibble(DR_data) %>%
     group_by(dose, variable2) %>%
     summarize(var_value = mean(var_name, na.rm=TRUE),
@@ -345,7 +387,6 @@ plot_DR <- function(DR_model) {
                                 "\nHerbicide:", variable2,
                                 "\nBiomass:", var_value))) +
     scale_x_log10() +
-    geom_errorbar(mapping=aes(ymin=var_value-sd, ymax=var_value+sd,color = variable2), width=0.2, alpha = .4) +
     geom_smooth(aes(color = variable2),
                 method = drm,
                 method.args = list(fct = L.4()), se = F) +
@@ -353,6 +394,24 @@ plot_DR <- function(DR_model) {
     labs(title= "", x = "Dose (g a.i /ha)",  y = "Biomass") +
     theme(legend.position = "bottom") + guides(color=guide_legend(title="Group"))
 
-  p1
+
+  if (parameter == 3) {
+
+  }
+
+
+  if (error_bars = TRUE) {
+    p1 +
+      geom_errorbar(mapping=aes(ymin=var_value-sd, ymax=var_value+sd,
+                                color = variable2), width=0.2, alpha = .4)
+
+  } else {
+    p1
+  }
+
+
+
+
+
 }
 

@@ -75,13 +75,16 @@ plot_DR <- function(DR_model) {
 
   # correct model dataframe and create a dataframe to plot
   DR_data <- DR_model$data
-  cols <- which(names(DR_data) == 'variable')
-  names(DR_data)[cols] <- paste0('variable', seq_along(cols))
+  colnames(DR_data) <- c("dose", "var_name", "variable1", "variable2", "weights")
+  #cols <- which(names(DR_data) == 'variable')
+  #names(DR_data)[cols] <- paste0('variable', seq_along(cols))
   df_plot <- tibble(DR_data) %>%
     group_by(dose, variable2) %>%
     summarize(var_value = mean(var_name, na.rm=TRUE),
               sd = std_mean(var_name)) %>%
-    mutate(dose = dose + 0.1)
+    mutate(dose = dose + 0.01)
+
+  # get
 
   # generate plot
   p1 <- ggplot(data = df_plot, aes(x = dose, y = var_value)) +
@@ -92,7 +95,7 @@ plot_DR <- function(DR_model) {
     scale_x_log10() +
     geom_errorbar(mapping=aes(ymin=var_value-sd, ymax=var_value+sd,color = variable2), width=0.2, alpha = .4) +
     geom_smooth(aes(color = variable2),
-                method = drm,
+                method = "drm",
                 method.args = list(fct = L.4()), se = F) +
     theme_light() +
     labs(title= "", x = "Dose (g a.i /ha)",  y = "Biomass") +
@@ -100,9 +103,5 @@ plot_DR <- function(DR_model) {
 
   return(p1)
 }
-
-plot_DR(selected_model)
-
-ggplotly(p1, tooltip = "text")
 
 
