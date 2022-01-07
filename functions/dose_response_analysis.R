@@ -204,6 +204,8 @@ applyBoxCox <- function(model){
   }
 }
 
+applyBoxCox()
+selected_model$call
 # final diagnostic plot
 homogTest_plot(selected_model)
 normalQQ_plot(selected_model)
