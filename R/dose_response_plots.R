@@ -22,7 +22,7 @@ applyBoxCox(selected_model)
 t <- selected_model$call
 # plot 1 - DRC version
 
-plot(selected_model, bp=.2, bty="l",
+plot(Curve_fit$model, bp=.2, bty="l",
      ylab="Biomass reduction (%)",
      xlab="Dicamba (g a.e /ha)",
      main="Biomass reduction dose response",
@@ -56,31 +56,31 @@ p1 <- ggplot(data = df_1, aes(x = Dose, y = var_value)) +
                               "\nBiomass:", var_value))) +
   scale_x_log10() +
   geom_errorbar(mapping=aes(ymin=var_value-sd, ymax=var_value+sd,color = Herbicide), width=0.2, alpha = .4) +
-  geom_smooth(aes(color = Herbicide),method = drm, method.args = list(fct = L.4()), se = F) +
+  geom_smooth(aes(color = Herbicide),method = drm, method.args = list(fct = L.4()), se = F, fullrange=TRUE) +
   theme_light() +
   labs(title= "", x = "Dose (g a.e /ha)",  y = "Biomass") +
   theme(legend.position = "bottom")
 
-t <- selected_model$data
+t <- Curve_fit$data
 cols <- which(names(selected_model$data) == 'variable')
 names(t)[cols] <- paste0('variable', seq_along(cols))
 names(t)
 
 ## create function for the first plot ---------
 selected_model$data
-plot_DR <- function(DR_model) {
+plot_DR <- function(DR_model, legend_title = "Group", y_label = "Response", x_label = "Rate") {
 
   # general sd function
   std_mean <- function(x) sd(x,na.rm=TRUE)/sqrt(length(x))
 
   # correct model dataframe and create a dataframe to plot
-  DR_data <- DR_model$data
+  DR_data <- DR_model$model$data
   colnames(DR_data) <- c("dose", "var_name", "variable1", "variable2", "weights")
   #cols <- which(names(DR_data) == 'variable')
   #names(DR_data)[cols] <- paste0('variable', seq_along(cols))
   df_plot <- tibble(DR_data) %>%
     group_by(dose, variable2) %>%
-    summarize(var_value = mean(var_name, na.rm=TRUE),
+    summarise(var_value = mean(var_name, na.rm=TRUE),
               sd = std_mean(var_name)) %>%
     mutate(dose = dose + 0.01)
 
@@ -88,20 +88,27 @@ plot_DR <- function(DR_model) {
 
   # generate plot
   p1 <- ggplot(data = df_plot, aes(x = dose, y = var_value)) +
-    geom_point(aes(color = variable2,
-                   text = paste("Dose:", dose,
-                                "\nHerbicide:", variable2,
-                                "\nBiomass:", var_value))) +
+    geom_point(aes(color = variable2)) +
     scale_x_log10() +
-    geom_errorbar(mapping=aes(ymin=var_value-sd, ymax=var_value+sd,color = variable2), width=0.2, alpha = .4) +
+    geom_errorbar(mapping=aes(ymin= var_value - sd,
+                              ymax= var_value + sd,
+                              color = variable2),
+                  width=0.2, alpha = .4) +
     geom_smooth(aes(color = variable2),
                 method = "drm",
-                method.args = list(fct = L.4()), se = F) +
+                method.args = list(fct = L.4()), se = F,
+                formula = 'y ~ x') +
     theme_light() +
-    labs(title= "", x = "Dose (g a.i /ha)",  y = "Biomass") +
-    theme(legend.position = "bottom") + guides(color=guide_legend(title="Group"))
+    labs(title= "", x = x_label,  y = y_label) +
+    theme(legend.position = "bottom") +
+    guides(color=guide_legend(title=legend_title))
 
   return(p1)
 }
 
+plotly_build(plot_DR(Curve_fit, x_label = "Herbicide (g ai/ha)"))  %>%
+  layout(legend = list(orientation = "h",   # show entries horizontally
+                       xanchor = "center",  # use center of legend as anchor
+                       x = 0.5))
 
+Curve_fit$model$data
