@@ -4,13 +4,18 @@ library(grid)
 library(tidyverse)
 library(broom)
 library(patchwork)
-install.packages("pacman")
-# load data
-df <- S.alba
-# Fit Dose response function --------------------
-# Written by: Lucas K. Bobadilla
 
-FitDoseResponse <- function(dose, var_name, group, df,
+# load test data
+df <- S.alba
+
+
+# Fit Dose response function --------------------------------------------------
+# Written by: Lucas K. Bobadilla
+# Written on: January 21th 2022
+# Purpose: Fit Dose response model
+# Description: Will run the 8 most used drc models and choose the best fit
+
+FitDoseResponse <- function(dose, var_name, group, df = drc::S.alba,
                             fit_weibull = FALSE, get_AIC_table = FALSE,
                             get_summary = TRUE) {
 
@@ -117,11 +122,13 @@ FitDoseResponse <- function(dose, var_name, group, df,
 
   }
 
-  DR_model <- list(model = selected_model, summary_table = summ_table, model_fit = model_table, df = df)
+  DR_model <- list(model = selected_model, summary_table = summ_table,
+                   model_fit = model_table, df = tibble::tibble(df))
   print("Model saved! Use var_name$ format to access it")
   return(DR_model)
 
 }
+
 
 Curve_fit <- FitDoseResponse(dose = "Dose", var_name = "DryMatter", group = "Herbicide",
                 df, fit_weibull = TRUE, get_AIC_table = TRUE)
@@ -129,9 +136,14 @@ Curve_fit <- FitDoseResponse(dose = "Dose", var_name = "DryMatter", group = "Her
 
 
 
-# plot model assumption plots
 
-# function to check for normality
+
+# Normality check function --------------------------------------------------
+# Written by: Lucas K. Bobadilla
+# Written on: January 21th 2022
+# Purpose: Will check visually the assumption for Normality
+# Description: Runs a shapiro-wilk test at the create object from FitDoseResponse
+
 normalQQ_plot <- function (model_object) # argument: vector of numbers
 {
   # following four lines from base R's qqline()
@@ -150,7 +162,7 @@ normalQQ_plot <- function (model_object) # argument: vector of numbers
   Shap_pval <- Shap_test$p.value
 
   # create annotation with the shapiro test
-  grob <- grobTree(textGrob(paste("Shapiro-wilk test p-value:", round(Shap_pval,4)), x=0.1,  y=0.95, hjust=0,
+  grob <- grid::grobTree(textGrob(paste("Shapiro-wilk test p-value:", round(Shap_pval,4)), x=0.1,  y=0.95, hjust=0,
                             gp=gpar(col="red", fontsize=13, fontface="italic")))
 
   # create plot
@@ -164,7 +176,13 @@ normalQQ_plot <- function (model_object) # argument: vector of numbers
 
 }
 
-# function for variance assumption
+# homogeneity check function --------------------------------------------------
+# Written by: Lucas K. Bobadilla
+# Written on: January 21th 2022
+# Purpose: Will check visually the assumption for homogeneity
+# Description: Runs a fligner.test and plot residuals using the FitDoseResponse object
+
+# function for
 homogTest_plot <- function(model_object){
   # get model
   model <- model_object$model
@@ -178,7 +196,7 @@ homogTest_plot <- function(model_object){
   FK_pval <- the.FKtest$p.value
 
   # create annotation with the fligner test
-  grob <- grobTree(textGrob(paste("Fligner test p-value:", round(FK_pval,4)), x=0.1,  y=0.95, hjust=0,
+  grob <- grid::grobTree(textGrob(paste("Fligner test p-value:", round(FK_pval,4)), x=0.1,  y=0.95, hjust=0,
                             gp=gpar(col="red", fontsize=13, fontface="italic")))
 
   #  create plot
@@ -192,11 +210,22 @@ homogTest_plot <- function(model_object){
 }
 
 
-# function to apply correction if needed
+# Apply BoxCox correction --------------------------------------
+# Written by: Lucas K. Bobadilla
+# Written on: February 13th, 2022
+# purpose: Apply correction in case needed
+Curve_fit$model$call
+tibble(Curve_fit$model$data[c(1,2,4)])
+
+
+rlang::call_modify(Curve_fit$model$call)
+
+
+
 applyBoxCox <- function(model_object){
 
   # refit model
-
+  model <- model_object$model
 
   # calculate shapiro-wilk
   Shap_test <- shapiro.test(residuals(model))
@@ -209,30 +238,54 @@ applyBoxCox <- function(model_object){
   df$Group <- as.factor(Group)
   the.FKtest <- fligner.test(residuals(model), df$Group)
   FK_pval <- the.FKtest$p.value
-
+  var_name <- df$var_name
   # apply correction
   if (FK_pval <= 0.05 | Shap_pval <= 0.05) {
     print("Box-Cox correction applied using the Anova method. New model saved into global environment.")
-    corrected_model <<- boxcox(selected_model,method="anova", plotit = F)
+    corrected_model <- boxcox(do.cal(model$call),method="anova", plotit = F)
+    return(corrected_model)
   } else {
     print("No correction needed.")
   }
 }
 
-applyBoxCox(selected_model)
+boxcox(Curve_fit$model,method="anova", plotit = F)
+applyBoxCox(Curve_fit)
 
 boxcox(selected_model)
 # final diagnostic plot
 homogTest_plot(Curve_fit)
 normalQQ_plot(Curve_fit)
-#apply correction
+
+diagnostic_plots <- function(model_object, qqplot = TRUE, res_vs_fit = TRUE){
+  require(patchwork)
+  if (qqplot == FALSE) {
+    homog_plot <- homogTest_plot(Curve_fit)
+    return(homog_plot)
+  }
+  if (res_vs_fit == FALSE) {
+    normal_plot <- normalQQ_plot(model_object)
+    return(normal_plot)
+  }
+  if (qqplot == T & res_vs_fit == T) {
+    normal_plot <- normalQQ_plot(model_object)
+    homog_plot <- homogTest_plot(Curve_fit)
+    join_plot <- normal_plot + homog_plot
+    return(join_plot)
+  }
+}
+diagnostic_plots(Curve_fit)
+# Apply BoxCox correction --------------------------------------
+# Written by: Lucas K. Bobadilla
+# Written on: February 13th, 2022
+# purpose: Apply correction in case needed
 applyBoxCox(selected_model)
 
 
 # function to look for outliers
 model <- selected_model
-ouliersRemoval <- function(model) {
-
+ouliersRemoval <- function(model_object) {
+  model <- model_object$model
   # check for outliers
   df <- tibble(model$data[c(1,2,4)])
   ei.s <- residuals(model)/sqrt(sum(residuals(model)^2)/(nrow(df) - length(model$coefficients)))
@@ -254,4 +307,4 @@ ouliersRemoval <- function(model) {
 }
 
 
-ouliersRemoval(selected_model)
+ouliersRemoval(Curve_fit)
