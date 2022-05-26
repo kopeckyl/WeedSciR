@@ -98,8 +98,6 @@ RCBD_design <- function(blocks_n, treat_n, plot_label = c(treatments, plots), se
   # Restore the old random seed, if present
   if (!is.na(seed) && !is.na(saved.seed)) { .Random.seed <- saved.seed }
 
-  if (returnstrings) { return(squareid) }
-  else               { return(allsq) }
 }
 
 # run function
@@ -109,7 +107,7 @@ test
 
 
 
-# Generate Latin square function ------------
+# LATIN SQUARE FUNCTION ----------------------------------------------------
 ## - len is the size of the latin square
 ## - reps is the number of repetitions - how many Latin squares to generate
 ## - seed is a random seed that can be used to generate repeatable sequences
@@ -251,14 +249,64 @@ latinSquare_design <- function(treatments, reps=1, seed=NA, returnstrings=F) {
   }
 }
 
+# CRD DESIGN FUNCTION ----------------------------------------------
+# Written by Lucas K. Bobadilla
+# Written on May 25 2022
+# Description: Create a CRD design object in the form of a list
 
-test <- latinSquare_design(treatments = treat, reps = 2, seed = 1234)
+require(tibble)
+CRD_design <- function(reps_n, treat, reps_as_col = TRUE, plot_label = c(treatments, plots), seed = NA, byID = TRUE) {
+  # Save the old random seed and use the new one, if present
+  if (!is.na(seed)) {
+    if (exists(".Random.seed"))  { saved.seed <- .Random.seed }
+    else                         { saved.seed <- NA }
+    set.seed(seed)
+  }
 
-reps = 2
-test[,1:length(treat)+1]
+
+  # generate randomization
+  treatments <- rep(1:length(treat), reps_n)
+  treatments <- factor(treatments)
+  if (byID) {
+    levels(treatments) <- treat
+  }
+  crd <- matrix(sample(rep(treatments, reps_n)), nrow = length(treat), ncol = reps_n)
+
+  #plot_map
+  plot <- matrix(101:(100+(reps_n*length(treat))), nrow = length(treat), ncol = reps_n)
+
+  #if reps as row
+  if (reps_as_col == FALSE) {
+    crd <- matrix(sample(rep(treat, reps_n)), nrow = reps_n, ncol = length(treat))
+    plot <- matrix(101:(100+(reps_n*length(treat))), nrow = reps_n, ncol = length(treat))
+  }
+
+  # create final list
+  crd_obj <- list(crd_treat = tibble::tibble(data.frame(crd)),
+                  crd_plot = tibble::tibble(data.frame(plot)))
+  #return matrix
+  return(crd_obj)
+
+  # Restore the old random seed, if present
+  if (!is.na(seed) && !is.na(saved.seed)) { .Random.seed <- saved.seed }
+
+}
+
+
+t = c("A","B","C", "D")
+matrix(rep(t,4),4,4)
+
+crd <- CRD_design(reps_n = 6, treat = t, reps_as_col = F)
+
+
+
+# plot test -------------------
+
+reps = 4
+treat = 4
 
 # generate plot data frame treatments
-x1 <- rep(1:length(treat), each = length(treat))
+x1 <- rep(1:treat, each = length(treat))
 x2 <- x1 + 1
 
 y1 <- rep(1:nrow(test), nrow(test))
@@ -295,4 +343,3 @@ plot_design <- df %>%
   theme(legend.position = "none",
         axis.title = element_blank()) +
   geom_text(aes(x = x1, y = y1, label = block_names), na.rm = TRUE)
-
